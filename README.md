@@ -1,90 +1,132 @@
-# Log Monitoring and Alerting System
+# LogWatch – ML & DL Log Monitoring System
 
 ## Project Overview
-This project implements a log monitoring and alerting system that ingests application logs, analyzes them, and presents insights through an interactive dashboard. The system supports multiple log formats, rule-based alerting, advanced filtering, and export of results for further analysis.
+
+LogWatch is an intelligent log analysis and monitoring dashboard designed to ingest application logs, detect anomalies using Machine Learning (ML) and Deep Learning (DL), and provide real-time alerting based on predefined heuristics and anomaly detection models.
+
+The system combines rule-based monitoring with AI-driven anomaly detection to ensure robust and scalable log monitoring.
 
 ---
 
-## Design Decisions
+# Design Decisions
 
-### Modular Architecture
-The system is designed with clear separation of concerns:
-- *Log ingestion* handles parsing and normalization of logs
-- *Alert engine* encapsulates rule-based alert logic
-- *UI layer* manages visualization, filtering, and user interaction
+## 1. Modular Pipeline Architecture
 
-This improves maintainability and allows easy extension of alert rules or input formats.
+The system follows a modular architecture to ensure scalability and separation of concerns:
 
----
+- **Ingestion & Normalization Layer**
+  - Parses raw logs
+  - Converts logs into structured DataFrames
+  - Encodes categorical features for ML models
 
-### Tab-Based User Interface
-The UI is organized into separate tabs to keep functionality clear and uncluttered:
+- **Hybrid Detection Engine**
+  - **Heuristic Layer**: Fast rule-based detection for known patterns
+  - **ML Layer (Isolation Forest)**: Unsupervised anomaly detection for unusual log frequency or distribution
+  - **DL Layer (LSTM Autoencoder)**: Sequence-based anomaly detection to capture temporal irregularities
 
-- *Dashboard*: High-level metrics and error trends
-- *Alerts*: Active alerts with severity and explanation
-- *Filter Logs*: User-controlled filtering with apply/reset actions
-- *Logs*: Complete, unfiltered log view
-- *Export*: Download filtered logs as CSV
-
----
-
-### Controlled Filtering
-Filters are applied only when the user clicks *Apply Filter*:
-- Prevents automatic refresh on every input change
-- Improves clarity and predictability
-- *Reset Filter* clears inputs and removes filtered results from view
+- **Root Cause Analysis Layer**
+  - Correlates anomaly scores with services and timestamps
+  - Helps identify the source of failures
 
 ---
 
-### Log Format Normalization
-The system supports both structured and unstructured logs:
-- .json
-- .log / .txt
+## 2. Hybrid Detection Strategy
 
-All logs are normalized into a common schema:
-timestamp | level | service | message | response_time
-This ensures consistent filtering and alert evaluation across formats.
+### Heuristic Alerts
+Used for known error patterns such as error spikes and keyword bursts.
 
----
+### Machine Learning (Isolation Forest)
+Detects logs that statistically deviate from the baseline behavior.
 
-## Alert Rules Implemented
+### Deep Learning (LSTM Autoencoder)
+Reconstructs log sequences and flags anomalies when reconstruction error exceeds threshold.
 
-### High Error Rate Alert
-- Triggered when the number of ERROR logs exceeds a defined threshold within a time window
-- Severity: *HIGH*
-- Purpose: Detects critical system failures or instability
+This layered design ensures:
+- Fast detection for known issues
+- Adaptive detection for unknown patterns
+- Temporal anomaly recognition
 
 ---
 
-### Keyword Spike Alert
-- Triggered when a critical keyword (e.g., timeout, failed, exception) appears frequently in log messages
-- Severity: *MEDIUM*
-- Purpose: Identifies recurring failure patterns not always classified as errors
+## 3. Thematic User Interface
+
+The system uses a tab-based Streamlit dashboard with:
+
+- Dashboard
+- AI Monitoring
+- Filter
+- Alerts
+
+This prevents information overload and improves usability.
 
 ---
 
-### Severity Levels
-- *HIGH*: Critical issue requiring immediate attention
-- *MEDIUM*: Warning condition requiring investigation
-- *LOW*: Informational (extensible if required)
+# Alert Rules Implemented
 
-Severity is assigned within the alert rule logic and displayed with each alert.
+## 1. Rule-Based Alerts (Heuristics)
+
+### Error Spike Rule
+Monitors the number of `ERROR` logs within a defined time window.
+- Triggers when count exceeds threshold
+- Severity: HIGH
+
+### Keyword Spike Rule
+Scans log messages for critical keywords such as:
+- "Critical"
+- "Timeout"
+- "Database Down"
+
+Triggers alert when keyword frequency increases sharply.
 
 ---
 
-## How to Run the Project
+## 2. AI-Driven Alerts (Anomalies)
 
-### Prerequisites
-- Python 3.8 or higher
+### Isolation Forest (ML)
+Identifies statistically abnormal logs compared to baseline distribution.
+
+### LSTM Autoencoder (DL)
+Detects anomalies in log sequences based on reconstruction error.
+
+---
+
+# Project Structure
+app.py # Main Streamlit entry point
+log_ingestion.py # Log reading and initial parsing
+preprocess.py # Feature engineering & normalization
+ml_anomaly.py # Isolation Forest model
+dl_lstm.py # LSTM Autoencoder model
+alert_engine.py # Heuristic spike rules
+sample_application.log # Sample log file
+requirements.txt
+
+---
+
+# How to Run the Project
+
+## 1. Prerequisites
+
+Ensure you have:
+
+- Python 3.8+
 - pip
 
-### Install Dependencies
-```
-pip install -r requirements.txt
-```
-### Run the Application
-```
-streamlit run analysis.py
-```
-The application will be available at:
-http://localhost:8501
+Required Libraries:
+- Streamlit
+- Pandas
+- Altair
+- PyTorch
+- Scikit-learn
+
+---
+
+## 2. Installation
+
+Clone the repository and install dependencies:
+`pip install -r requirements.txt`
+
+## 3. Execution
+
+Place your log file (e.g., `sample_application.log`) in the root directory.
+
+`streamlit run app.py`

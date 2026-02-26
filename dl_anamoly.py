@@ -1,4 +1,3 @@
-# dl_anomaly.py
 import torch
 
 def compute_dl_anomaly(model, sequences):

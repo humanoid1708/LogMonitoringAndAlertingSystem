@@ -14,6 +14,26 @@ import json
 import re
 from datetime import datetime
 
+
+def _parse_timestamp(value):
+    """
+    Support:
+    - ISO strings with or without 'Z', e.g. '2026-02-19T10:15:30Z'
+    - ISO strings without timezone
+    - Epoch seconds as int / float
+    """
+    # Epoch seconds
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value)
+
+    ts_str = str(value)
+    # Handle trailing Z (UTC) commonly used in JSON logs
+    if ts_str.endswith("Z"):
+        ts_str = ts_str.replace("Z", "+00:00")
+
+    return datetime.fromisoformat(ts_str)
+
+
 def read_logs(filename):
     logs = []
 
@@ -23,7 +43,7 @@ def read_logs(filename):
             data = json.load(f)
             for log in data:
                 logs.append({
-                    "timestamp": datetime.fromisoformat(log["timestamp"]),
+                    "timestamp": _parse_timestamp(log["timestamp"]),
                     "level": log["level"],
                     "service": log.get("service") or log.get("service_name") or log.get("component"),
                     "message": log["message"],

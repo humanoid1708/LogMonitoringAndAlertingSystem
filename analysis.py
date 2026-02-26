@@ -71,7 +71,7 @@ with tab1:
     st.altair_chart(chart, use_container_width=True)
 
 with tab2:
-    st.subheader("🤖 AI Monitoring (ML + DL)")
+    st.subheader("🤖 AI Monitoring")
 
     features = normalize(logs)
 

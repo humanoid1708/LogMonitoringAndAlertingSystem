@@ -1,327 +1,172 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import torch
+
 from log_ingestion import read_logs
+from preprocess import normalize
 from alert_engine import error_spike_rule, keyword_spike_rule
+from anomaly import compute_anomaly_score
+from root_cause import find_root_cause
+
+# ML
+from ml_anomaly import train_iforest, predict_iforest
+
+# DL
+from dl_lstm import LSTMAutoEncoder
+from dl_utils import build_sequences
+from dl_anamoly import compute_dl_anomaly
+
 
 # ---------------- Page Config ----------------
 st.set_page_config(page_title="Log Monitoring System", layout="wide")
 
-# ---------------- Global Styles ----------------
 st.markdown(
     """
     <style>
-    body, .stApp {
-        background-color: #020617;
-        color: #e5e7eb;
-        font-size: 16px;
-    }
-
-    .metric-card {
-        background: #020617;
-        padding: 1.2rem 1.4rem;
-        border-radius: 0.75rem;
-        border: 1px solid #111827;
-        box-shadow: 0 10px 25px rgba(15,23,42,0.7);
-    }
-
-    .metric-label {
-        font-size: 1rem;
-        color: #9ca3af;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-    }
-
-    .metric-value {
-        font-size: 1.9rem;
-        font-weight: 700;
-        margin-top: 0.25rem;
-    }
-
-    .metric-errors { color: #f97373; }
-    .metric-warn { color: #facc15; }
-    .metric-info { color: #22c55e; }
-    .metric-total { color: #38bdf8; }
-    .metric-alerts { color: #f97373; }
-
-    .alert-card {
-        background: linear-gradient(135deg, rgba(248,113,113,0.15), rgba(127,29,29,0.5));
-        border-radius: 0.75rem;
-        padding: 1rem 1.25rem;
-        border: 1px solid rgba(248,113,113,0.5);
-        margin-bottom: 0.75rem;
-        font-size: 1rem;
-    }
-
-    /* Tab labels */
-    div[data-baseweb="tab-list"] button p {
-        font-size: 1rem !important;
-        font-weight: 600;
-    }
+    body, .stApp { background-color:#020617; color:#e5e7eb; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-st.markdown(
-    """
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;">
-      <div>
-        <div style="font-size:2rem;font-weight:700;color:#e5e7eb;">LogWatch</div>
-        <div style="font-size:1.05rem;color:#9ca3af;">Real-time Log Monitoring &amp; Alerting</div>
-      </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+st.title("📊 LogWatch – ML & DL Log Monitoring")
 
 # ---------------- Load Logs ----------------
-LOG_FILE = "sample-application.log"   # or logs.json
+LOG_FILE = "sample-application.log"
 logs = read_logs(LOG_FILE)
 df = pd.DataFrame(logs)
 
-# ---- Safety ----
 for col in ["timestamp", "level", "service", "message"]:
     if col not in df.columns:
         df[col] = "unknown"
 
 df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-# ---------------- Alerts (GLOBAL) ----------------
+# ---------------- Alerts ----------------
 alerts = []
-# 5-minute, 1-minute, and 10-second error spikes
-alerts.extend(error_spike_rule(logs, threshold=5, window_minutes=5, label="5 minutes"))
-alerts.extend(error_spike_rule(logs, threshold=3, window_minutes=1, label="1 minute"))
-alerts.extend(error_spike_rule(logs, threshold=2, window_seconds=10, label="10 seconds"))
-
-# Keyword spike (default 5-minute)
+alerts.extend(error_spike_rule(logs))
 alerts.extend(keyword_spike_rule(logs))
 
-# ---------------- Session State ----------------
-if "applied_filters" not in st.session_state:
-    st.session_state.applied_filters = {
-        "level": "ALL",
-        "service": "ALL",
-        "start_dt": df["timestamp"].min(),
-        "end_dt": df["timestamp"].max(),
-        "keyword": "",
-        "applied": False
-    }
-
 # ---------------- Tabs ----------------
-tab1, tab2, tab3 = st.tabs(
-    ["📊 Dashboard", "🔍 Filter Logs", "🚨 Alerts"]
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["📊 Dashboard", "🤖 AI Monitoring", "🔍 Filter Logs", "🚨 Alerts"]
 )
 
 # ================= DASHBOARD =================
 with tab1:
-    st.subheader("📊 System Overview")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Logs", len(df))
+    c2.metric("Errors", len(df[df["level"] == "ERROR"]))
+    c3.metric("Services", df["service"].nunique())
+    c4.metric("Active Alerts", len(alerts))
 
-    total_logs = len(df)
-    error_logs = len(df[df["level"] == "ERROR"])
-    warn_logs = len(df[df["level"] == "WARN"])
-    info_logs = len(df[df["level"] == "INFO"])
-    services = df["service"].nunique()
-    active_alerts = len(alerts)
+    temp = df.copy()
+    temp["minute"] = temp["timestamp"].dt.floor("T")
+    counts = temp.groupby(["minute", "level"]).size().reset_index(name="count")
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-              <div class="metric-label">Total Logs</div>
-              <div class="metric-value metric-total">{total_logs}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+    chart = (
+        alt.Chart(counts)
+        .mark_line()
+        .encode(
+            x="minute:T",
+            y="count:Q",
+            color="level:N",
+            tooltip=["minute:T", "level:N", "count:Q"],
         )
-    with c2:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-              <div class="metric-label">Errors</div>
-              <div class="metric-value metric-errors">{error_logs}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with c3:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-              <div class="metric-label">Warnings</div>
-              <div class="metric-value metric-warn">{warn_logs}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with c4:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-              <div class="metric-label">Infos</div>
-              <div class="metric-value metric-info">{info_logs}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with c5:
-        st.markdown(
-            f"""
-            <div class="metric-card">
-              <div class="metric-label">Active Alerts</div>
-              <div class="metric-value metric-alerts">{active_alerts}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    )
+    st.altair_chart(chart, use_container_width=True)
 
-    st.subheader("📈 Log Volume Over Time")
-    if not df.empty:
-        temp = df.copy()
-        temp["minute"] = temp["timestamp"].dt.floor("T")
-        counts = (
-            temp.groupby(["minute", "level"])
-            .size()
-            .reset_index(name="count")
-        )
-
-        level_order = ["ERROR", "WARN", "INFO"]
-        color_scale = alt.Scale(
-            domain=level_order,
-            range=["#f97373", "#facc15", "#22c55e"],
-        )
-
-        chart = (
-            alt.Chart(counts)
-            .mark_line(point=False, interpolate="monotone")
-            .encode(
-                x=alt.X("minute:T", title="Time"),
-                y=alt.Y("count:Q", title="Log Count"),
-                color=alt.Color("level:N", scale=color_scale, title="Level"),
-                tooltip=["minute:T", "level:N", "count:Q"],
-            )
-            .properties(height=260)
-        )
-
-        st.altair_chart(chart, use_container_width=True)
-    else:
-        st.info("No logs loaded to display trends.")
-
-# ================= FILTER TAB =================
+# ================= AI MONITORING =================
 with tab2:
-    st.subheader("🔍 Filter Logs")
+    st.subheader("🤖 AI Monitoring (ML + DL)")
 
-    af = st.session_state.applied_filters
+    # 1️⃣ Feature Engineering
+    features = normalize(logs)
 
-    # ---- Draft Inputs (NO AUTO APPLY) ----
-    level_input = st.selectbox(
-        "Log Level",
-        ["ALL", "INFO", "WARN", "ERROR"],
-        index=["ALL", "INFO", "WARN", "ERROR"].index(af["level"])
-    )
-
-    service_list = ["ALL"] + sorted(df["service"].unique())
-    service_input = st.selectbox(
-        "Service",
-        service_list,
-        index=service_list.index(af["service"])
-    )
-
-    st.subheader("⏱ Date & Time Range")
-    start_dt_input = st.datetime_input(
-        "Start Date & Time",
-        value=af["start_dt"]
-    )
-    end_dt_input = st.datetime_input(
-        "End Date & Time",
-        value=af["end_dt"]
-    )
-
-    keyword_input = st.text_input(
-        "🔎 Keyword Search",
-        value=af["keyword"]
-    )
-
-    # ---- Centered Buttons ----
-    left, center, right = st.columns([3, 4, 3])
-    with center:
-        b1, gap, b2 = st.columns([1, 0.3, 1])
-
-        with b1:
-            if st.button("Apply Filter", use_container_width=True):
-                st.session_state.applied_filters = {
-                    "level": level_input,
-                    "service": service_input,
-                    "start_dt": start_dt_input,
-                    "end_dt": end_dt_input,
-                    "keyword": keyword_input,
-                    "applied": True
-                }
-                st.rerun()
-
-        with b2:
-            if st.button("Reset Filter", use_container_width=True):
-                st.session_state.applied_filters = {
-                    "level": "ALL",
-                    "service": "ALL",
-                    "start_dt": df["timestamp"].min(),
-                    "end_dt": df["timestamp"].max(),
-                    "keyword": "",
-                    "applied": False
-                }
-                st.rerun()
-
-    # ---- Show Filtered Logs ONLY if Applied ----
-    if st.session_state.applied_filters["applied"]:
-        af = st.session_state.applied_filters
-        filtered = df.copy()
-
-        if af["level"] != "ALL":
-            filtered = filtered[filtered["level"] == af["level"]]
-
-        if af["service"] != "ALL":
-            filtered = filtered[filtered["service"] == af["service"]]
-
-        filtered = filtered[
-            (filtered["timestamp"] >= af["start_dt"]) &
-            (filtered["timestamp"] <= af["end_dt"])
-        ]
-
-        if af["keyword"]:
-            filtered = filtered[
-                filtered["message"].str.contains(
-                    af["keyword"], case=False, na=False
-                )
-            ]
-
-        st.info(f"{len(filtered)} matching logs found")
-        st.dataframe(filtered, use_container_width=True)
-
-        st.subheader("⬇ Export Filtered Logs")
-        csv_bytes = filtered.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="Download CSV",
-            data=csv_bytes,
-            file_name="filtered_logs.csv",
-            mime="text/csv",
-        )
+    if features is None or features.empty:
+        st.warning("Not enough data for AI analysis")
     else:
-        st.warning("No filter applied yet")
+        # 2️⃣ Baseline ML anomaly score
+        features = compute_anomaly_score(features)
 
-# ================= ALERTS =================
-with tab3:
-    st.subheader("🚨 Active Alerts")
-    if alerts:
-        for alert in alerts:
+        st.subheader("📊 Baseline Anomaly Scores")
+        st.dataframe(features, use_container_width=True)
+
+        # 3️⃣ ML – Isolation Forest
+        model_ml = train_iforest(features)
+        features = predict_iforest(model_ml, features)
+
+        st.subheader("🧠 ML Anomalies (Isolation Forest)")
+        st.dataframe(
+            features[features["ml_anomaly"] == True],
+            use_container_width=True
+        )
+
+        # 4️⃣ DL – LSTM Autoencoder
+        seqs = build_sequences(features)
+
+        if len(seqs) > 5:
+            model_dl = LSTMAutoEncoder(input_size=3)
+            dl_scores = compute_dl_anomaly(model_dl, seqs)
+
+            features = features.iloc[len(features) - len(dl_scores):].copy()
+            features["dl_anomaly_score"] = dl_scores
+
+            st.subheader("🧠 DL Anomalies (LSTM Autoencoder)")
+            st.dataframe(
+                features.sort_values("dl_anomaly_score", ascending=False).head(10),
+                use_container_width=True
+            )
+
+        # 5️⃣ Root Cause Analysis
+        root = find_root_cause(features)
+
+        if root:
             st.error(
                 f"""
-**{alert['alert_name']}**  
-Severity: {alert['severity']}  
-Reason: {alert['reason']}  
-Threshold: {alert['threshold']}  
-Window: {alert['window']}
+🔥 ROOT CAUSE DETECTED  
+Service: {root['service']}  
+Time: {root['timestamp']}  
+Score: {root['score']}
+"""
+            )
+        else:
+            st.success("No root cause detected")
+
+# ================= FILTER LOGS =================
+with tab3:
+    level = st.selectbox("Level", ["ALL", "INFO", "WARN", "ERROR"])
+    service = st.selectbox("Service", ["ALL"] + sorted(df["service"].unique()))
+    keyword = st.text_input("Keyword")
+
+    filtered = df.copy()
+    if level != "ALL":
+        filtered = filtered[filtered["level"] == level]
+    if service != "ALL":
+        filtered = filtered[filtered["service"] == service]
+    if keyword:
+        filtered = filtered[filtered["message"].str.contains(keyword, case=False)]
+
+    st.dataframe(filtered, use_container_width=True)
+    st.download_button(
+        "Download CSV",
+        filtered.to_csv(index=False),
+        "filtered_logs.csv",
+        "text/csv"
+    )
+
+# ================= ALERTS =================
+with tab4:
+    if alerts:
+        for a in alerts:
+            st.error(
+                f"""
+**{a['alert_name']}**  
+Severity: {a['severity']}  
+Reason: {a['reason']}  
+Window: {a['window']}
 """
             )
     else:
-        st.success("✅ No active alerts")
+        st.success("No active alerts")

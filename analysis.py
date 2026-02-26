@@ -9,11 +9,14 @@ from alert_engine import error_spike_rule, keyword_spike_rule
 from anomaly import compute_anomaly_score
 from root_cause import find_root_cause
 
+
 from ml_anomaly import train_iforest, predict_iforest
+
 
 from dl_lstm import LSTMAutoEncoder
 from dl_utils import build_sequences
 from dl_anamoly import compute_dl_anomaly
+
 
 
 st.set_page_config(page_title="Log Monitoring System", layout="wide")
@@ -29,6 +32,7 @@ st.markdown(
 
 st.title("📊 LogWatch – ML & DL Log Monitoring")
 
+
 LOG_FILE = "sample-application.log"
 logs = read_logs(LOG_FILE)
 df = pd.DataFrame(logs)
@@ -39,13 +43,17 @@ for col in ["timestamp", "level", "service", "message"]:
 
 df["timestamp"] = pd.to_datetime(df["timestamp"])
 
+
 alerts = []
 alerts.extend(error_spike_rule(logs))
 alerts.extend(keyword_spike_rule(logs))
 
+
 tab1, tab2, tab3, tab4 = st.tabs(
     ["📊 Dashboard", "🤖 AI Monitoring", "🔍 Filter Logs", "🚨 Alerts"]
 )
+
+features = normalize(logs)
 
 with tab1:
     c1, c2, c3, c4 = st.columns(4)
@@ -53,6 +61,10 @@ with tab1:
     c2.metric("Errors", len(df[df["level"] == "ERROR"]))
     c3.metric("Services", df["service"].nunique())
     c4.metric("Active Alerts", len(alerts))
+    
+   
+   
+
 
     temp = df.copy()
     temp["minute"] = temp["timestamp"].dt.floor("T")
@@ -69,20 +81,25 @@ with tab1:
         )
     )
     st.altair_chart(chart, use_container_width=True)
+    
+
 
 with tab2:
-    st.subheader("🤖 AI Monitoring")
+    st.subheader("🤖 AI Monitoring ")
 
+    
     features = normalize(logs)
 
     if features is None or features.empty:
         st.warning("Not enough data for AI analysis")
     else:
+       
         features = compute_anomaly_score(features)
 
         st.subheader("📊 Baseline Anomaly Scores")
         st.dataframe(features, use_container_width=True)
 
+      
         model_ml = train_iforest(features)
         features = predict_iforest(model_ml, features)
 
@@ -92,6 +109,7 @@ with tab2:
             use_container_width=True
         )
 
+      
         seqs = build_sequences(features)
 
         if len(seqs) > 5:
@@ -107,6 +125,7 @@ with tab2:
                 use_container_width=True
             )
 
+        
         root = find_root_cause(features)
 
         if root:
@@ -121,33 +140,81 @@ Score: {root['score']}
         else:
             st.success("No root cause detected")
 
+
 with tab3:
-    level = st.selectbox("Level", ["ALL", "INFO", "WARN", "ERROR"])
-    service = st.selectbox("Service", ["ALL"] + sorted(df["service"].unique()))
-    keyword = st.text_input("Keyword")
+    st.subheader("🔍 Advanced Log Filtering")
 
+    min_date = df["timestamp"].min().date()
+    max_date = df["timestamp"].max().date()
+
+    
+    with st.form("filter_form"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            level = st.selectbox("Log Level", ["ALL", "INFO", "WARN", "ERROR"])
+            service = st.selectbox("Service Source", ["ALL"] + sorted(df["service"].unique()))
+            keyword = st.text_input("Message Keyword Search")
+
+        with col2:
+            date_range = st.date_input(
+                "Select Date Range",
+                value=(min_date, max_date),
+                min_value=min_date,
+                max_value=max_date
+            )
+            
+            t_col1, t_col2 = st.columns(2)
+            
+            start_time_str = t_col1.text_input("Start (HH:MM:SS)", value="00:00:00")
+            end_time_str = t_col2.text_input("End (HH:MM:SS)", value="23:59:59")
+
+        
+        fb1, fb2, _ = st.columns([1, 1, 4])
+        apply_btn = fb1.form_submit_button("✅ Apply Filters")
+        reset_btn = fb2.form_submit_button("🔄 Reset Filters")
+
+    
     filtered = df.copy()
-    if level != "ALL":
-        filtered = filtered[filtered["level"] == level]
-    if service != "ALL":
-        filtered = filtered[filtered["service"] == service]
-    if keyword:
-        filtered = filtered[filtered["message"].str.contains(keyword, case=False)]
 
+    if apply_btn:
+        try:
+            
+            if level != "ALL":
+                filtered = filtered[filtered["level"] == level]
+            if service != "ALL":
+                filtered = filtered[filtered["service"] == service]
+            if keyword:
+                filtered = filtered[filtered["message"].str.contains(keyword, case=False)]
+            
+            
+            if len(date_range) == 2:
+                start_dt = pd.to_datetime(f"{date_range[0]} {start_time_str}")
+                end_dt = pd.to_datetime(f"{date_range[1]} {end_time_str}")
+                filtered = filtered[(filtered["timestamp"] >= start_dt) & (filtered["timestamp"] <= end_dt)]
+        except Exception as e:
+            st.error(f"Invalid Time Format: Please use HH:MM:SS. Error: {e}")
+
+    if reset_btn:
+        
+        st.rerun()
+
+    
+    st.write(f"Showing *{len(filtered)}* entries")
     st.dataframe(filtered, use_container_width=True)
-    st.download_button(
-        "Download CSV",
-        filtered.to_csv(index=False),
-        "filtered_logs.csv",
-        "text/csv"
-    )
 
+    st.download_button(
+        label="📥 Download Filtered CSV",
+        data=filtered.to_csv(index=False),
+        file_name="filtered_logs.csv",
+        mime="text/csv"
+    )
 with tab4:
     if alerts:
         for a in alerts:
             st.error(
                 f"""
-**{a['alert_name']}**  
+*{a['alert_name']}*  
 Severity: {a['severity']}  
 Reason: {a['reason']}  
 Window: {a['window']}

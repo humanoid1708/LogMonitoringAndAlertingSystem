@@ -1,0 +1,20 @@
+2026-03-01 10:00:01.120  INFO 20001 --- [nio-8080-exec-1] c.n.p.controller.AuthController : Login request received for userId=101
+2026-03-01 10:00:02.240  DEBUG 20002 --- [nio-8080-exec-2] c.n.p.service.UserService : Fetching user profile for userId=101
+2026-03-01 10:00:03.310  INFO 20003 --- [nio-8080-exec-3] c.n.p.service.UserService : Successfully fetched user profile for userId=101
+2026-03-01 10:00:04.450  WARN 20004 --- [nio-8080-exec-4] c.n.p.service.PaymentService : Payment processing delayed for orderId=556
+2026-03-01 10:00:05.520  ERROR 20005 --- [nio-8080-exec-5] c.n.p.service.PaymentService : Payment failed due to timeout for orderId=556
+2026-03-01 10:00:06.640  ERROR 20006 --- [nio-8080-exec-6] c.n.p.service.PaymentService : Payment retry failed due to timeout for orderId=556
+2026-03-01 10:00:07.710  ERROR 20007 --- [nio-8080-exec-7] c.n.p.service.PaymentService : Payment retry failed due to timeout for orderId=556
+2026-03-01 10:00:08.880  WARN 20008 --- [nio-8080-exec-8] c.n.p.service.OrderService : Order validation took longer than expected (duration=1450ms)
+2026-03-01 10:00:09.950  INFO 20009 --- [nio-8080-exec-9] c.n.p.controller.OrderController : Order created successfully, orderId=556
+2026-03-01 10:00:10.120  DEBUG 20010 --- [nio-8080-exec-10] c.n.p.service.InventoryService : Checking inventory for productId=77
+2026-03-01 10:00:11.340  INFO 20011 --- [nio-8080-exec-11] c.n.p.service.InventoryService : Inventory available for productId=77
+2026-03-01 10:00:12.410  ERROR 20012 --- [nio-8080-exec-12] c.n.p.service.OrderService : Order processing failed due to timeout for orderId=556
+2026-03-01 10:00:13.580  ERROR 20013 --- [nio-8080-exec-13] c.n.p.service.OrderService : Order rollback triggered due to timeout for orderId=556
+2026-03-01 10:00:14.650  INFO 20014 --- [nio-8080-exec-14] c.n.p.controller.HealthController : Health check OK
+2026-03-01 10:00:15.720  DEBUG 20015 --- [nio-8080-exec-15] c.n.p.service.HealthService : Health check response time (duration=210ms)
+2026-03-01 10:00:16.890  WARN 20016 --- [nio-8080-exec-16] c.n.p.service.UserService : Profile update slow for userId=202 (duration=1320ms)
+2026-03-01 10:00:18.010  ERROR 20017 --- [nio-8080-exec-17] c.n.p.service.UserService : Failed to update profile due to timeout for userId=202
+2026-03-01 10:00:19.150  INFO 20018 --- [nio-8080-exec-18] c.n.p.controller.UserController : Returning profile details for userId=202
+2026-03-01 10:00:20.220  DEBUG 20019 --- [nio-8080-exec-19] c.n.p.service.NotificationService : Sending notification to userId=202
+2026-03-01 10:00:21.380  INFO 20020 --- [nio-8080-exec-20] c.n.p.service.NotificationService : Notification sent successfully to userId=202

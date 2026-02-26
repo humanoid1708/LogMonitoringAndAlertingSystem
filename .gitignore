@@ -1,0 +1,55 @@
+# Streamlit-specific
+.streamlit/
+! .streamlit/config.toml
+! .streamlit/credentials.toml
+
+# Python-specific
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment Variables (Crucial for security)
+.env
+.flaskenv
+
+# Data and Logs
+*.log
+*.csv
+*.json
+!metadata.json  # Example: Keep if it's a config file, not data
+data/           # Ignore local data folders
+
+# IDE-specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS-specific
+.DS_Store
+Thumbs.db

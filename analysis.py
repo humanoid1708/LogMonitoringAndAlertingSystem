@@ -9,16 +9,13 @@ from alert_engine import error_spike_rule, keyword_spike_rule
 from anomaly import compute_anomaly_score
 from root_cause import find_root_cause
 
-# ML
 from ml_anomaly import train_iforest, predict_iforest
 
-# DL
 from dl_lstm import LSTMAutoEncoder
 from dl_utils import build_sequences
 from dl_anamoly import compute_dl_anomaly
 
 
-# ---------------- Page Config ----------------
 st.set_page_config(page_title="Log Monitoring System", layout="wide")
 
 st.markdown(
@@ -32,7 +29,6 @@ st.markdown(
 
 st.title("📊 LogWatch – ML & DL Log Monitoring")
 
-# ---------------- Load Logs ----------------
 LOG_FILE = "sample-application.log"
 logs = read_logs(LOG_FILE)
 df = pd.DataFrame(logs)
@@ -43,17 +39,14 @@ for col in ["timestamp", "level", "service", "message"]:
 
 df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-# ---------------- Alerts ----------------
 alerts = []
 alerts.extend(error_spike_rule(logs))
 alerts.extend(keyword_spike_rule(logs))
 
-# ---------------- Tabs ----------------
 tab1, tab2, tab3, tab4 = st.tabs(
     ["📊 Dashboard", "🤖 AI Monitoring", "🔍 Filter Logs", "🚨 Alerts"]
 )
 
-# ================= DASHBOARD =================
 with tab1:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Logs", len(df))
@@ -77,23 +70,19 @@ with tab1:
     )
     st.altair_chart(chart, use_container_width=True)
 
-# ================= AI MONITORING =================
 with tab2:
     st.subheader("🤖 AI Monitoring (ML + DL)")
 
-    # 1️⃣ Feature Engineering
     features = normalize(logs)
 
     if features is None or features.empty:
         st.warning("Not enough data for AI analysis")
     else:
-        # 2️⃣ Baseline ML anomaly score
         features = compute_anomaly_score(features)
 
         st.subheader("📊 Baseline Anomaly Scores")
         st.dataframe(features, use_container_width=True)
 
-        # 3️⃣ ML – Isolation Forest
         model_ml = train_iforest(features)
         features = predict_iforest(model_ml, features)
 
@@ -103,7 +92,6 @@ with tab2:
             use_container_width=True
         )
 
-        # 4️⃣ DL – LSTM Autoencoder
         seqs = build_sequences(features)
 
         if len(seqs) > 5:
@@ -119,7 +107,6 @@ with tab2:
                 use_container_width=True
             )
 
-        # 5️⃣ Root Cause Analysis
         root = find_root_cause(features)
 
         if root:
@@ -134,7 +121,6 @@ Score: {root['score']}
         else:
             st.success("No root cause detected")
 
-# ================= FILTER LOGS =================
 with tab3:
     level = st.selectbox("Level", ["ALL", "INFO", "WARN", "ERROR"])
     service = st.selectbox("Service", ["ALL"] + sorted(df["service"].unique()))
@@ -156,7 +142,6 @@ with tab3:
         "text/csv"
     )
 
-# ================= ALERTS =================
 with tab4:
     if alerts:
         for a in alerts:
